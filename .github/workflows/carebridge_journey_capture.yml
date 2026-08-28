@@ -42,7 +42,8 @@ jobs:
       - name: Decode journey capture script
         run: |
           mkdir -p journey_output/screenshots journey_output/pdf
-          base64 -d journey_test/run_journey.py.gz.b64 | gunzip > journey_test/run_journey.py
+          cat journey_test/run_journey.part1 journey_test/run_journey.part2 journey_test/run_journey.part3 journey_test/run_journey.part4 > journey_test/run_journey.py.gz.b64.joined
+          base64 -d journey_test/run_journey.py.gz.b64.joined | gunzip > journey_test/run_journey.py
           python -m py_compile journey_test/run_journey.py
 
       - name: Start isolated CareBridge test server
