@@ -1,0 +1,82 @@
+name: CareBridge Fresh Journey Capture
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'journey_test/**'
+      - '.github/workflows/carebridge_journey_capture.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DB_ENGINE: sqlite
+      DATABASE: ${{ github.workspace }}/journey_output/journey.db
+      JOURNEY_OUTPUT: ${{ github.workspace }}/journey_output
+      CAREBRIDGE_BASE_URL: http://127.0.0.1:5000
+      SECRET_KEY: carebridge-journey-test-only-2026-not-production
+      FLASK_DEBUG: '0'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Checkout CareBridge
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install CareBridge and capture dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Decode journey capture script
+        run: |
+          mkdir -p journey_output/screenshots journey_output/pdf
+          base64 -d journey_test/run_journey.py.gz.b64 | gunzip > journey_test/run_journey.py
+          python -m py_compile journey_test/run_journey.py
+
+      - name: Start isolated CareBridge test server
+        run: |
+          rm -f "$DATABASE"
+          gunicorn --workers 1 --bind 127.0.0.1:5000 --timeout 180 --access-logfile journey_output/access.log --error-logfile journey_output/app.log app:app &
+          echo $! > journey_output/server.pid
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:5000/login >/dev/null; then
+              echo 'CareBridge test server is ready.'
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'CareBridge failed to start.'
+          cat journey_output/app.log || true
+          exit 1
+
+      - name: Execute real CareBridge patient journey and capture screenshots
+        run: python journey_test/run_journey.py
+
+      - name: Capture server log tail
+        if: always()
+        run: |
+          echo '--- app.log tail ---' > journey_output/run_summary.txt
+          tail -n 250 journey_output/app.log >> journey_output/run_summary.txt 2>/dev/null || true
+          echo '--- access.log tail ---' >> journey_output/run_summary.txt
+          tail -n 250 journey_output/access.log >> journey_output/run_summary.txt 2>/dev/null || true
+
+      - name: Upload fresh journey artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carebridge-fresh-journey-${{ github.run_id }}
+          path: journey_output/
+          if-no-files-found: warn
+          retention-days: 7
