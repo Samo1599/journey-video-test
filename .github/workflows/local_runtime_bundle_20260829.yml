@@ -1,0 +1,39 @@
+name: CareBridge Local Runtime Bundle
+
+on:
+  push:
+    paths:
+      - '.github/workflows/local_runtime_bundle_20260829.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build offline wheelhouse
+        run: |
+          python -m pip install --upgrade pip wheel
+          mkdir -p local_runtime/wheelhouse local_runtime/src
+          pip wheel -r requirements.txt -w local_runtime/wheelhouse
+          rsync -a --exclude='.git' --exclude='local_runtime' --exclude='journey_output' ./ local_runtime/src/
+          python -V > local_runtime/python_version.txt
+          pip --version > local_runtime/pip_version.txt
+
+      - name: Upload local runtime bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: carebridge-local-runtime-${{ github.run_id }}
+          path: local_runtime/
+          retention-days: 7
