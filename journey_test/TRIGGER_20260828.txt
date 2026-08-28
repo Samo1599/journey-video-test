@@ -1,0 +1,1 @@
+Trigger fresh CareBridge journey capture after workflow creation.
