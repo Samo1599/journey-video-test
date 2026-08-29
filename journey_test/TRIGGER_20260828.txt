@@ -1,1 +1,3 @@
-Trigger fresh CareBridge journey capture after workflow creation.
+Trigger fresh CareBridge journey capture for final video.
+Run requested: 2026-08-29 UTC.
+Scenario: strong intro and laboratory PDF workflow.
