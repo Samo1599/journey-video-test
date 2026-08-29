@@ -54,11 +54,28 @@ jobs:
           for i in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:5000/login >/dev/null; then
               echo 'CareBridge test server is ready.'
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -fsS http://127.0.0.1:5000/login >/dev/null; then
+            echo 'CareBridge failed to start.'
+            cat journey_output/app.log || true
+            exit 1
+          fi
+          python -c "import journey_test.run_journey as journey; journey.wait_for_db(); journey.seed_test_staff()"
+          kill "$(cat journey_output/server.pid)"
+          wait "$(cat journey_output/server.pid)" 2>/dev/null || true
+          gunicorn --workers 1 --bind 127.0.0.1:5000 --timeout 180 --access-logfile journey_output/access.log --error-logfile journey_output/app.log app:app &
+          echo $! > journey_output/server.pid
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:5000/login >/dev/null; then
+              echo 'CareBridge test server restarted with journey users.'
               exit 0
             fi
             sleep 1
           done
-          echo 'CareBridge failed to start.'
+          echo 'CareBridge failed to restart after journey-user seed.'
           cat journey_output/app.log || true
           exit 1
 
